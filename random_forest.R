@@ -50,7 +50,7 @@ train$incomming_ref = factor(train$incomming_ref)
 
 #fit a random forest model, here I am selecting some hyper parameter such as mtry = 6 you can test different numbers but we shall explore these in details in the following session.
 #here the rule of thumb is to use p/3 variables for regression trees, here p is the number of predictors in the model, and we had 19 predictors
-rf <-randomForest(incomming_ref ~ unemployment + clean_elections + gdp_capita +
+rf <-randomForest(incomming_ref ~ clean_elections + gdp_capita +
                     population + avg_inc_ref_5y + ratio_inc_ref_5y +
                     + outgoing_ref_neighbors, data= train, mtry = 3, ntree = 1000) 
 
@@ -63,9 +63,9 @@ pred_rf <- predict(object = rf,
 
 #check the RMSE value for the predicted set
 testRMSE_rf <- rmse(test$incomming_ref, pred_rf)
-
-#print RMSE
 testRMSE_rf
+
+test$prediction_rf <- pred_rf
 
 #create model explainer
 explainer_rf <- DALEX::explain(
@@ -94,7 +94,7 @@ ref_data$avg_inc_ref_5y <- as.numeric(ref_data$avg_inc_ref_5y)
 ref_data$ratio_inc_ref_5y <- as.numeric(ref_data$ratio_inc_ref_5y)
 ref_data$outgoing_ref_neighbors <- as.numeric(ref_data$outgoing_ref_neighbors)
 
-model_data <- ref_data[,c('unemployment','clean_elections','population',
+model_data <- ref_data[,c('clean_elections','population',
                           'gdp_capita','incomming_ref','avg_inc_ref_5y',
                           'ratio_inc_ref_5y','outgoing_ref_neighbors','ADMIN','ISO_A3')]
 
@@ -106,7 +106,7 @@ train <- model_data[split1 == 0, ]
 test <- model_data[split1== 1, ]
 
 
-mdl = lm(incomming_ref ~ unemployment + clean_elections + gdp_capita +
+mdl = lm(incomming_ref ~  clean_elections + gdp_capita +
                  population + avg_inc_ref_5y + ratio_inc_ref_5y +
                  + outgoing_ref_neighbors, data= train)
 summary(mdl)
@@ -118,7 +118,13 @@ pred_lm <- predict(object = mdl,
 testRMSE_lm <- rmse(test$incomming_ref, pred_lm)
 testRMSE_lm
 
-test$prediction <- pred_lm
+test$prediction_lm <- pred_lm
+
+ggplot(data = test, aes(x = ADMIN))+
+  geom_line(aes(y = incomming_ref, group = 1), color = 'red')+
+  geom_line(aes(y = pred_lm, group = 1), color = 'green')+
+  geom_line(aes(y = pred_rf, group = 1), color = 'blue')
+
 
 ###################################################################
 
