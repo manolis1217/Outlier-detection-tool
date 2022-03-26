@@ -118,6 +118,8 @@ pred_lm <- predict(object = mdl,
 testRMSE_lm <- rmse(test$incomming_ref, pred_lm)
 testRMSE_lm
 
+test$prediction <- pred_lm
+
 ###################################################################
 
 trctrl <- trainControl(method = "none")
