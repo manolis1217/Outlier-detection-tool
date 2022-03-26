@@ -51,19 +51,85 @@ train$incomming_ref = factor(train$incomming_ref)
 #fit a random forest model, here I am selecting some hyper parameter such as mtry = 6 you can test different numbers but we shall explore these in details in the following session.
 #here the rule of thumb is to use p/3 variables for regression trees, here p is the number of predictors in the model, and we had 19 predictors
 rf <-randomForest(incomming_ref ~ unemployment + clean_elections + gdp_capita +
-                    population + gini_index + avg_inc_ref_5y + ratio_inc_ref_5y +
+                    population + avg_inc_ref_5y + ratio_inc_ref_5y +
                     + outgoing_ref_neighbors, data= train, mtry = 3, ntree = 1000) 
 
 print(rf)
+#let us plot the Variable importance from the RF model outcome
+vip::vip(rf, num_features = 19, idth = 0.5, aesthetics = list(fill = "purple2"), include_type = T)
+
+pred_rf <- predict(object = rf, 
+                   newdata = test)
+
+#check the RMSE value for the predicted set
+testRMSE_rf <- rmse(test$incomming_ref, pred_rf)
+
+#print RMSE
+testRMSE_rf
 
 #create model explainer
 explainer_rf <- DALEX::explain(
   model = rf,
   data = train,
-  y = as.integer (train$incomming_ref),
+  y = train$incomming_ref,
   label = "Random Forest",
   verbose = FALSE
 )
 
 #now make an interactive dashboard
 modelStudio::modelStudio(explainer_rf)
+
+###################################################################
+
+#ref_data <- ref_data[complete.cases(ref_data),]
+#ref_data <- ref_data[ref_data$incomming_ref != '',]
+
+ref_data$unemployment <- as.numeric(ref_data$unemployment)
+ref_data$clean_elections <- as.numeric(ref_data$clean_elections)
+ref_data$population <- as.numeric(ref_data$population)
+ref_data$gdp_capita <- as.numeric(ref_data$gdp_capita)
+ref_data$gini_index <- as.numeric(ref_data$gini_index)
+ref_data$incomming_ref <- as.numeric(ref_data$incomming_ref)
+ref_data$avg_inc_ref_5y <- as.numeric(ref_data$avg_inc_ref_5y)
+ref_data$ratio_inc_ref_5y <- as.numeric(ref_data$ratio_inc_ref_5y)
+ref_data$outgoing_ref_neighbors <- as.numeric(ref_data$outgoing_ref_neighbors)
+
+model_data <- ref_data[,c('unemployment','clean_elections','population',
+                          'gdp_capita','incomming_ref','avg_inc_ref_5y',
+                          'ratio_inc_ref_5y','outgoing_ref_neighbors','ADMIN','ISO_A3')]
+
+model_data <- model_data[complete.cases(model_data),]
+model_data <- model_data[model_data$incomming_ref != '',]
+
+split1<- sample(c(rep(0, 0.75 * nrow(model_data)), rep(1, 0.25 * nrow(model_data))))
+train <- model_data[split1 == 0, ] 
+test <- model_data[split1== 1, ]
+
+
+mdl = lm(incomming_ref ~ unemployment + clean_elections + gdp_capita +
+                 population + avg_inc_ref_5y + ratio_inc_ref_5y +
+                 + outgoing_ref_neighbors, data= train)
+summary(mdl)
+
+pred_lm <- predict(object = mdl, 
+                   newdata = test)
+
+#check the RMSE value for the predicted set
+testRMSE_lm <- rmse(test$incomming_ref, pred_lm)
+testRMSE_lm
+
+###################################################################
+
+trctrl <- trainControl(method = "none")
+
+# we will now train random forest model
+rfregFit <- train(Age~., 
+                  data = train, 
+                  method = "ranger",
+                  trControl=trctrl,
+                  # calculate importance
+                  importance="permutation", 
+                  tuneGrid = data.frame(mtry=50,
+                                        min.node.size = 5,
+                                        splitrule="variance")
+)
