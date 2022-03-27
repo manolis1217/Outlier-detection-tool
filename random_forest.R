@@ -8,6 +8,7 @@ easypackages::packages ("sf", "sp", "tmap", "mapview", "car", "RColorBrewer", "t
 
 #install.packages("rlang")
 library(rlang)
+library(Metrics)
 
 ref_data <- st_read ("data/final_dataset.csv")
 
@@ -52,7 +53,7 @@ train$incomming_ref = factor(train$incomming_ref)
 #here the rule of thumb is to use p/3 variables for regression trees, here p is the number of predictors in the model, and we had 19 predictors
 rf <-randomForest(incomming_ref ~ clean_elections + gdp_capita +
                     population + avg_inc_ref_5y + ratio_inc_ref_5y +
-                    + outgoing_ref_neighbors, data= train, mtry = 3, ntree = 1000) 
+                    + outgoing_ref_neighbors, data= train, mtry = 6, ntree = 1000) 
 
 print(rf)
 #let us plot the Variable importance from the RF model outcome
