@@ -27,15 +27,21 @@ test.set_wtID  <- rsample::testing(data_split)
 train.set <- train.set_wtID 
 test.set <- test.set_wtID 
 
-
+library(rpart)
+library(rpart.plot)
 #Fit the decision tree 
 #Note: We are using, method = "poisson". It can also be "a"nova", "poisson", "class" or "exp". Depending on the data type. In this case pedal is a count data so we selected poisson. 
-DT0 <- rpart (pedal ~ trafficsigcount + bus_stopscount + restcount + street_lampcount + PoP2015_Number +
-                cycle_ln_dist + bikefac_dist + bus_stop_dist + Shop_dist + edu_dist + park_dist + len_per_ar + inter3_4ways + avg_centBC +
-                road_speed_median + elevstdev + NDVImean + shdiv, data= train.set,  method  = "anova") 
+DT0 <- rpart (incomming_ref ~ clean_elections + gdp_capita +
+                population + avg_inc_ref_5y + ratio_inc_ref_5y +
+                + outgoing_ref_neighbors, data= train,  method  = "anova") 
 
 
 summary (DT0)
+rpart.plot(DT0)
+
+pred_tree <- predict(DT0, test)
+testRMSE_tree <- rmse(test$incomming_ref, pred_tree)
+testRMSE_tree
 
 ####################################################################
 
@@ -67,6 +73,17 @@ testRMSE_rf <- rmse(test$incomming_ref, pred_rf)
 testRMSE_rf
 
 test$prediction_rf <- pred_rf
+
+library(ranger)
+rf2 <- ranger(incomming_ref ~ clean_elections + gdp_capita +
+                population + avg_inc_ref_5y + ratio_inc_ref_5y +
+                + outgoing_ref_neighbors, num.trees = 1000, mtry = 6, data = train)
+
+pred_rf2 <- stats::predict(rf2,test)$predictions
+
+#check the RMSE value for the predicted set
+testRMSE_rf2 <- rmse(test$incomming_ref, pred_rf2)
+testRMSE_rf2
 
 #create model explainer
 explainer_rf <- DALEX::explain(
@@ -126,6 +143,11 @@ ggplot(data = test, aes(x = ADMIN))+
   geom_line(aes(y = pred_lm, group = 1), color = 'green')+
   geom_line(aes(y = pred_rf, group = 1), color = 'blue')
 
+test %>% 
+  ggplot(aes(pred_lm, incomming_ref)) +
+  geom_point(colour = "#ff6767", alpha = 0.3) +
+  labs(title = "Predicted and observed") + 
+  theme_bw(18)
 
 ###################################################################
 
