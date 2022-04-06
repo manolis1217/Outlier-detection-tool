@@ -282,8 +282,3 @@ subset['diff_lm'] <- subset['incomming_ref_target']-abs(subset['prediction_lm'])
 subset['diff_rf'] <- subset['incomming_ref_target']-abs(subset['prediction_rf'])
 subset['diff_xgb'] <- subset['incomming_ref_target']-abs(subset['pred_xgboost'])
 subset['diff_pred_comb'] <- subset['incomming_ref_target']-abs(subset['pred_comb'])
-
-inc_ref_plot <- mapview::mapview(validation_model_data, zcol = "incomming_ref_target")
-pred_lm_plot <- mapview::mapview(validation_model_data, zcol = "prediction_lm")
-
-inc_ref_plot | pred_lm_plot
