@@ -47,8 +47,8 @@ test <- test.set_wtID
 
 ################### CHECKING FOR SPATIAL AUTOCORRELATION
 
-linearMod <- lm (incomming_ref_target ~ incomming_ref + clean_elections + gdp_capita +
-                   population + ratio_inc_ref_5y + #avg_inc_ref_5y
+linearMod <- lm (incomming_ref_target ~  clean_elections + gdp_capita +
+                   population + ratio_inc_ref_5y + # incomming_ref + avg_inc_ref_5y
                    + outgoing_ref_neighbors + outgoing_ref_other_weighted, data= model_data) 
 summary(linearMod)
 
