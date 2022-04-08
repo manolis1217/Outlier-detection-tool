@@ -31,23 +31,25 @@ set.seed(555)
 
 ################### PREPROCESSING
 
-model_data <- ref_data[,c('clean_elections','population','incomming_ref_target',
+model_data <- ref_data[,c('clean_elections','population','incomming_ref_target', 'conflict', 'human_losses_neighbors',
                           'gdp_capita','incomming_ref','avg_inc_ref_5y','outgoing_ref_other_weighted',
+                          'difference_actual_5y','difference_actual_2y','difference_actual_1y',
                           'ratio_inc_ref_5y','outgoing_ref_neighbors','ADMIN','ISO_A3')]
 
 model_data <- model_data[!sf::st_is_empty(model_data), ] %>% na.omit()
 
 set.seed(555)
-data_split <- rsample::initial_split(model_data, strata = "incomming_ref_target", prop = 0.75)
-train.set_wtID <- rsample::training(data_split)
-test.set_wtID  <- rsample::testing(data_split)
-
-train <- train.set_wtID 
-test <- test.set_wtID 
+# data_split <- rsample::initial_split(model_data, strata = "incomming_ref_target", prop = 0.75)
+# train.set_wtID <- rsample::training(data_split)
+# test.set_wtID  <- rsample::testing(data_split)
+# 
+# train <- train.set_wtID 
+# test <- test.set_wtID 
 
 ################### CHECKING FOR SPATIAL AUTOCORRELATION
 
-linearMod <- lm (incomming_ref_target ~  clean_elections + gdp_capita +
+linearMod <- lm (incomming_ref_target ~  clean_elections + gdp_capita + conflict + human_losses_neighbors+
+                   + difference_actual_5y + difference_actual_2y + difference_actual_1y +
                    population + ratio_inc_ref_5y + # incomming_ref + avg_inc_ref_5y
                    + outgoing_ref_neighbors + outgoing_ref_other_weighted, data= model_data) 
 summary(linearMod)
@@ -68,9 +70,10 @@ mc_global
 ##################### RANDOM FOREST
 
 set.seed(555)
-rf <-randomForest(incomming_ref_target ~ incomming_ref + clean_elections + gdp_capita +
-                    population + ratio_inc_ref_5y #+ avg_inc_ref_5y
-                    + outgoing_ref_neighbors + outgoing_ref_other_weighted, data= train, mtry = 7, ntree = 15000) 
+rf <-randomForest(incomming_ref_target ~  clean_elections + gdp_capita + conflict + human_losses_neighbors+
+                    + difference_actual_5y + difference_actual_2y + difference_actual_1y +
+                    population + ratio_inc_ref_5y + # incomming_ref + avg_inc_ref_5y
+                    + outgoing_ref_neighbors + outgoing_ref_other_weighted, data= model_data, mtry = 7, ntree = 15000) 
 
 print(rf)
 vip::vip(rf, num_features = 19, idth = 0.5, aesthetics = list(fill = "purple2"), include_type = T)
@@ -81,11 +84,8 @@ testRMSE_rf
 
 ################### LINEAR MODEL
 
-#+ clean_elections + gdp_capita +
-#  population + ratio_inc_ref_5y + #avg_inc_ref_5y
-#  + outgoing_ref_neighbors + outgoing_ref_other_weighted
-
-mdl = lm(incomming_ref_target ~  incomming_ref + outgoing_ref_neighbors, data= train, y=T, x=T)
+mdl <- lm(incomming_ref_target ~ human_losses_neighbors + difference_actual_5y + 
+            outgoing_ref_neighbors + outgoing_ref_other_weighted, data= model_data, y=T, x=T)
 summary(mdl)
 
 pred_lm <- predict(object = mdl, newdata = test)
@@ -94,8 +94,11 @@ testRMSE_lm
 
 cv.lm(mdl, k = 10)
 
-fit <- train(incomming_ref_target ~  incomming_ref + outgoing_ref_neighbors, 
-             data = train, 
+fit <- train(incomming_ref_target ~ clean_elections + gdp_capita + conflict + human_losses_neighbors+
+               + difference_actual_5y + difference_actual_2y + difference_actual_1y +
+               population + ratio_inc_ref_5y + # incomming_ref + avg_inc_ref_5y
+               + outgoing_ref_neighbors + outgoing_ref_other_weighted, 
+             data = model_data, 
              method = "lm", 
              trControl = trainControl(method = "cv", number = 10))
 
@@ -108,8 +111,11 @@ fit <- train(incomming_ref_target ~  incomming_ref + outgoing_ref_neighbors,
 train<-st_drop_geometry(train)
 test<-st_drop_geometry(test)
 
-dtrain <- xgb.DMatrix(data.matrix(train[,!names(train) %in% c("incomming_ref_target","ADMIN","ISO_A3")]), label=train$incomming_ref_target)
-dtest <- xgb.DMatrix(data.matrix(test[,!names(test) %in% c("incomming_ref_target","ADMIN","ISO_A3")]), label=test$incomming_ref_target)
+model_data<-st_drop_geometry(model_data)
+dtrain <- xgb.DMatrix(data.matrix(model_data[,!names(model_data) %in% c("incomming_ref_target","ADMIN","ISO_A3",
+                                                              'incomming_ref','avg_inc_ref_5y')]), label=model_data$incomming_ref_target)
+dtest <- xgb.DMatrix(data.matrix(test[,!names(test) %in% c("incomming_ref_target","ADMIN","ISO_A3",
+                                                           'incomming_ref','avg_inc_ref_5y')]), label=test$incomming_ref_target)
 
 set.seed(555)
 xgb_model <- xgb.train(data = dtrain,
@@ -156,8 +162,9 @@ results_df <- data.frame(rmse_lm = testRMSE_lm,
 
 ### XGBOOST
 
-xgb_caret <- train(x = train[,!names(train) %in% c("incomming_ref_target","ADMIN","ISO_A3")],
-                   y = train$incomming_ref_target,
+xgb_caret <- train(x = model_data[,!names(model_data) %in% c("incomming_ref_target","ADMIN","ISO_A3",
+                                                             'incomming_ref','avg_inc_ref_5y')],
+                   y = model_data$incomming_ref_target,
                    method = 'xgbTree',
                    objective = "reg:squarederror",
                    trControl = trainControl(method = "repeatedcv",
@@ -181,10 +188,11 @@ testRMSE_xgboost_caret
 ### RANDOM FOREST
 
 set.seed(555)
-rf_caret <- train(incomming_ref_target ~ incomming_ref + clean_elections + gdp_capita +
-                    population + ratio_inc_ref_5y +#avg_inc_ref_5y
-                    + outgoing_ref_neighbors + outgoing_ref_other_weighted, 
-                  data = train,
+rf_caret <- train(incomming_ref_target ~  clean_elections + gdp_capita + conflict + human_losses_neighbors+
+                    + difference_actual_5y + difference_actual_2y + difference_actual_1y +
+                    population + ratio_inc_ref_5y + # incomming_ref + avg_inc_ref_5y
+                    + outgoing_ref_neighbors + outgoing_ref_other_weighted,
+                  data = model_data,
                   method = 'rf',
                   metric = 'RMSE',
                   trControl = trainControl(method = "repeatedcv",#https://en.wikipedia.org/wiki/Cross-validation_(statistics)#Repeated_random_sub-sampling_validation
@@ -206,9 +214,10 @@ mapview::mapview(validation_data, zcol = "incomming_ref")
 
 set.seed(555)
 
-validation_model_data <- validation_data[,c('clean_elections','population','incomming_ref_target',
-                          'gdp_capita','incomming_ref','avg_inc_ref_5y','outgoing_ref_other_weighted',
-                          'ratio_inc_ref_5y','outgoing_ref_neighbors','ADMIN','ISO_A3')]
+validation_model_data <- validation_data[,c('clean_elections','population','incomming_ref_target', 'conflict', 'human_losses_neighbors',
+                                            'gdp_capita','incomming_ref','avg_inc_ref_5y','outgoing_ref_other_weighted',
+                                            'difference_actual_5y','difference_actual_2y','difference_actual_1y',
+                                            'ratio_inc_ref_5y','outgoing_ref_neighbors','ADMIN','ISO_A3')]
 
 validation_model_data <- validation_model_data[!sf::st_is_empty(validation_model_data), ] %>% na.omit()
 
@@ -246,7 +255,8 @@ testRMSE_rf_val
 
 set.seed(555)
 validation_set <- xgb.DMatrix(data.matrix(validation_model_data[,!names(validation_model_data) 
-                                                                %in% c("incomming_ref_target","ADMIN","ISO_A3")]), 
+                                                                %in% c("incomming_ref_target","ADMIN","ISO_A3", 'pred_xgboost','prediction_lm','prediction_rf',
+                                                                       'incomming_ref','avg_inc_ref_5y')]), 
                               label=validation_model_data$incomming_ref_target)
 
 pred_xgboost_val <- predict(xgb_model, validation_set)
@@ -264,11 +274,11 @@ ggplot(data = validation_model_data, aes(x = ADMIN))+
   geom_line(aes(y = prediction_lm, group = 1, colour = 'prediction_lm'))+
   geom_line(aes(y = prediction_rf, group = 1, colour = 'prediction_rf'))+
   geom_line(aes(y = pred_xgboost, group = 1, colour = 'pred_xgboost'))+
-  geom_line(aes(y = pred_comb, group = 1, colour = 'pred_comb'), size=1)+
+  #geom_line(aes(y = pred_comb, group = 1, colour = 'pred_comb'), size=1)+
   geom_line(aes(y = incomming_ref_target, group = 1, colour = 'incomming_ref_target'), size=1)+
   scale_colour_manual("", 
-                      breaks = c("incomming_ref_target", "prediction_lm", "prediction_rf", "pred_xgboost","pred_comb"),
-                      values = c("red", "green", "blue", "yellow", "orange")) +
+                      breaks = c("incomming_ref_target", "prediction_lm", "prediction_rf", "pred_xgboost"),#"pred_comb"
+                      values = c("red", "green", "blue", "yellow")) + #"orange"
   labs(x = "Country",
        y = "Refugees")
 
@@ -277,7 +287,7 @@ results_df <- data.frame(rmse_lm = testRMSE_lm_val,
                          rmse_xgboost = testRMSE_xgboost_val)
 
 subset <- validation_model_data[,c('ADMIN','ISO_A3','incomming_ref_target',
-                                   'prediction_lm','pred_xgboost','prediction_rf','pred_comb')]
+                                   'prediction_lm','pred_xgboost','prediction_rf')]#,'pred_comb'
 subset['diff_lm'] <- subset['incomming_ref_target']-abs(subset['prediction_lm'])
 subset['diff_rf'] <- subset['incomming_ref_target']-abs(subset['prediction_rf'])
 subset['diff_xgb'] <- subset['incomming_ref_target']-abs(subset['pred_xgboost'])
